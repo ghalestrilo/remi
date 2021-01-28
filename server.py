@@ -25,7 +25,7 @@ from pythonosc import osc_server
 
 state = {
   'isRunning': False,
-  'history': [],
+  'history': [[ 0, 208, 214, 1 ]],
   'temperature': 1.2
 }
 
@@ -48,7 +48,7 @@ def engine_set(unused_addr, args):
 
 def push_event(unused_addr, event):
   print("[event] ~ {0}".format(event))
-  state['history'].append(event)
+  state['history'][0].append(event)
 
 def engine_print(unused_addr, args):
   field = args
@@ -63,19 +63,21 @@ def sample_model(unused_addr, args):
   event = model.predict()
   print(event)
 
-def bind_dispatcher(dispatcher, model):
-  dispatcher.map("/filter", print)
-  dispatcher.map("/volume", print_volume_handler, "Volume")
-  dispatcher.map("/logvolume", print_compute_handler, "Log volume", math.log)
+def prepare_model(unused_addr, args):
+  model = args[0]
+  event = model.realtime_setup(state['history'])
+  print(event)
 
+def bind_dispatcher(dispatcher, model):
   dispatcher.map("/start", engine_set, 'isRunning', True)
   dispatcher.map("/pause", engine_set, 'isRunning', False)
   dispatcher.map("/reset", lambda: state['history'].clear())
+  dispatcher.map("/debug", engine_print)
+  dispatcher.map("/event", push_event) # event2word
 
   if (model):
     dispatcher.map("/sample", sample_model, model)
-  dispatcher.map("/debug", engine_print)
-  dispatcher.map("/event", push_event) # event2word
+    dispatcher.map("/prep",   prepare_model, model)
 
 def load_model():
   return PopMusicTransformer(checkpoint='REMI-tempo-checkpoint', is_training=False)
