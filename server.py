@@ -6,6 +6,9 @@ import pickle
 import utils
 import time
 
+from model import PopMusicTransformer
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 """Small example OSC server
 
@@ -22,7 +25,8 @@ from pythonosc import osc_server
 
 state = {
   'isRunning': False,
-  'history': []
+  'history': [],
+  'temperature': 1.2
 }
 
 def print_volume_handler(unused_addr, args, volume):
@@ -54,17 +58,28 @@ def engine_print(unused_addr, args):
     print("no such key ~ {0}".format(field))
     pass
 
-def bind_dispatcher(dispatcher):
+def sample_model(unused_addr, args):
+  model = args[0]
+  event = model.predict()
+  print(event)
+
+def bind_dispatcher(dispatcher, model):
   dispatcher.map("/filter", print)
   dispatcher.map("/volume", print_volume_handler, "Volume")
   dispatcher.map("/logvolume", print_compute_handler, "Log volume", math.log)
 
   dispatcher.map("/start", engine_set, 'isRunning', True)
   dispatcher.map("/pause", engine_set, 'isRunning', False)
-  dispatcher.map("/reset", engine_set, 'history',   list([]))
+  dispatcher.map("/reset", lambda: state['history'].clear())
 
+  if (model):
+    dispatcher.map("/sample", sample_model, model)
   dispatcher.map("/debug", engine_print)
-  dispatcher.map("/event", push_event)
+  dispatcher.map("/event", push_event) # event2word
+
+def load_model():
+  return PopMusicTransformer(checkpoint='REMI-tempo-checkpoint', is_training=False)
+
 # /TODO: Move to engine.py
 
 
@@ -77,10 +92,13 @@ if __name__ == "__main__":
       type=int, default=5005, help="The port to listen on")
   args = parser.parse_args()
 
-  dispatcher = dispatcher.Dispatcher()
-  bind_dispatcher(dispatcher)
+  model = load_model()
 
-  server = osc_server.ThreadingOSCUDPServer(
-      (args.ip, args.port), dispatcher)
+  dispatcher = dispatcher.Dispatcher()
+  bind_dispatcher(dispatcher, model)
+
+  server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)
   print("Serving on {}".format(server.server_address))
   server.serve_forever()
+
+  model.close()
