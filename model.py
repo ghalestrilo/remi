@@ -344,6 +344,6 @@ class PopMusicTransformer(object):
       
       self.words[0].append(word)
       self.update_feed_dict()
-      return word
+      return self.word2event[word]
 
 

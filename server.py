@@ -5,29 +5,46 @@ import modules
 import pickle
 import utils
 import time
-
-from model import PopMusicTransformer
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-
-"""Small example OSC server
-
-This program listens to several addresses, and prints some information about
-received packets.
-"""
 import argparse
 import math
 
+from threading import Thread, Event
 from pythonosc import dispatcher
 from pythonosc import osc_server
+from model import PopMusicTransformer
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 # TODO: Move to engine.py
 
 state = {
   'isRunning': False,
   'history': [[ 0, 208, 214, 1 ]],
-  'temperature': 1.2
+  'temperature': 1.2,
+  'tickInterval': 0.25,
+  'model': None
 }
+
+class Clock(Thread):
+    def __init__(self, event):
+        Thread.__init__(self)
+        self.stopped = event
+
+    def run(self):
+        while not self.stopped.wait(state['tickInterval']):
+            if (state['isRunning'] == True):
+              # print("tick")
+              sample_model(None,[state['model']])
+
+def start_timer():
+  stopFlag = Event()
+  state['stopFlag'] = stopFlag
+  state['clock'] = Clock(stopFlag)
+  state['clock'].start()
+
+def stop_timer():
+  # this will stop the timer
+  state['stopFlag'].set()
 
 def print_volume_handler(unused_addr, args, volume):
   print("[{0}] ~ {1}".format(args[0], volume))
@@ -69,11 +86,14 @@ def prepare_model(unused_addr, args):
   print(event)
 
 def bind_dispatcher(dispatcher, model):
+  state['model'] = model
   dispatcher.map("/start", engine_set, 'isRunning', True)
   dispatcher.map("/pause", engine_set, 'isRunning', False)
   dispatcher.map("/reset", lambda: state['history'].clear())
   dispatcher.map("/debug", engine_print)
   dispatcher.map("/event", push_event) # event2word
+
+  dispatcher.map("/set", lambda addr, k, v: engine_set(addr, [k,v]))
 
   if (model):
     dispatcher.map("/sample", sample_model, model)
@@ -85,7 +105,7 @@ def load_model():
 # /TODO: Move to engine.py
 
 
-
+# Main
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--ip",
@@ -95,12 +115,14 @@ if __name__ == "__main__":
   args = parser.parse_args()
 
   model = load_model()
+  prepare_model(None,[model]) # for real time use
 
   dispatcher = dispatcher.Dispatcher()
   bind_dispatcher(dispatcher, model)
 
   server = osc_server.ThreadingOSCUDPServer((args.ip, args.port), dispatcher)
   print("Serving on {}".format(server.server_address))
+  start_timer()
   server.serve_forever()
-
+  stop_timer()
   model.close()
