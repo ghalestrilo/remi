@@ -34,7 +34,8 @@ class Clock(Thread):
         while not self.stopped.wait(state['tickInterval']):
             if (state['isRunning'] == True):
               # print("tick")
-              sample_model(None,[state['model']])
+              # sample_model(None,[state['model']])
+              state['model'].tick()
 
 def start_timer():
   stopFlag = Event()
@@ -89,7 +90,7 @@ def bind_dispatcher(dispatcher, model):
   state['model'] = model
   dispatcher.map("/start", engine_set, 'isRunning', True)
   dispatcher.map("/pause", engine_set, 'isRunning', False)
-  dispatcher.map("/reset", lambda: state['history'].clear())
+  dispatcher.map("/reset", lambda _: state['history'].clear())
   dispatcher.map("/debug", engine_print)
   dispatcher.map("/event", push_event) # event2word
 

@@ -346,4 +346,9 @@ class PopMusicTransformer(object):
       self.update_feed_dict()
       return self.word2event[word]
 
+    def tick(self, temperature=1.2, topk=1):
+      word = ''
+      while (word.startswith('Position') == False):
+        word = self.predict(temperature,topk)
+      return word
 
