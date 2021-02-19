@@ -1,3 +1,4 @@
+progress
 matplotlib==3.3.3
 mesh-tensorflow==0.1.18
 miditoolkit==0.1.14

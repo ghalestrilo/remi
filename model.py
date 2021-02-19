@@ -26,9 +26,7 @@ class PopMusicTransformer(object):
         self.d_ff = 2048
         self.n_token = len(self.event2word)
         self.learning_rate = 0.0002
-        # load model
         self.is_training = is_training
-        self.realtime_ready = False
         if self.is_training:
             self.batch_size = 4
         else:
@@ -293,62 +291,3 @@ class PopMusicTransformer(object):
     ########################################
     def close(self):
         self.sess.close()
-
-    def update_feed_dict(self):
-      if (self.realtime_ready != True):
-        original_length = len(self.words[0])
-        temp_x = np.zeros((self.batch_size, original_length))
-        for b in range(self.batch_size):
-            for z, t in enumerate(self.words[b]):
-                temp_x[b][z] = t
-      else:
-        temp_x = np.zeros((self.batch_size, 1))
-        for b in range(self.batch_size):
-          temp_x[b][0] = self.words[b][-1]
-
-      self.feed_dict = { self.x: temp_x }
-      for m, m_np in zip(self.mems_i, self.batch_m):
-          self.feed_dict[m] = m_np
-
-    ## TODO: Init track (time signature and tempo)
-    def realtime_setup(self, words=None):
-      self.tempo_classes = [v for k, v in self.event2word.items() if 'Tempo Class' in k]
-      self.tempo_values = [v for k, v in self.event2word.items() if 'Tempo Value' in k]
-      self.batch_m = [np.zeros((self.mem_len, self.batch_size, self.d_model), dtype=np.float32) for _ in range(self.n_layer)]
-
-      self.words = words
-      if (self.words == None):
-        self.words = []
-        ws = [self.event2word['Bar_None']]
-        ws.append(np.random.choice(self.tempo_classes))
-        ws.append(np.random.choice(self.tempo_values))
-        ws.append(self.event2word['Position_1/16'])
-        self.words.append(ws)
-
-      self.update_feed_dict()
-      self.realtime_ready = True
-
-    def predict(self, temperature=1.2, topk=1):
-      if (self.realtime_ready != True):
-        self.realtime_setup()
-      
-      _logits, _new_mem = self.sess.run([self.logits, self.new_mem], feed_dict=self.feed_dict)
-      _logit = _logits[-1, 0]
-
-      self.batch_m = _new_mem
-
-      word = self.temperature_sampling(
-        logits=_logit,
-        temperature=temperature,
-        topk=topk)
-      
-      self.words[0].append(word)
-      self.update_feed_dict()
-      return self.word2event[word]
-
-    def tick(self, temperature=1.2, topk=1):
-      word = ''
-      while (word.startswith('Position') == False):
-        word = self.predict(temperature,topk)
-      return word
-

@@ -9,6 +9,7 @@ miditoolkit.egg-info/
 Thumbs.db
 *.gz
 
+checkpoints/
 REMI-tempo-checkpoint
 REMI-tempo-chord-checkpoint
 zips
